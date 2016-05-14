@@ -1,5 +1,6 @@
 var express = require('express');
-var neo4j = require('./neo.js');
+var handlebars = require('express-handlebars');
+var neo = require('./neo.js');
 
 /*
 neo4j([{statement:"create (u:User {name:'person', age:25})"}], function(inResponse){
@@ -7,6 +8,13 @@ neo4j([{statement:"create (u:User {name:'person', age:25})"}], function(inRespon
 });
 */
 
-neo4j([{statement:"match (u:User) return u"}], function(inResponse){
+neo([{statement:"match (u:User) return u"}], function(inResponse){
     console.log(inResponse.body);
+});
+
+var server = express();
+server.engine('handlebars', handlebars());
+server.set('view engine', 'handlebars');
+server.get("/", function(inReq, inRes){
+    
 });
