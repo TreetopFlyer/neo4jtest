@@ -1,7 +1,9 @@
+require('dotenv').config();
 var express = require('express');
 var handlebars = require('express-handlebars');
 var neo = require('./neo');
 var unirest = require('unirest');
+
 
 /*
 neo4j([{statement:"create (u:User {name:'person', age:25})"}], function(inResponse){
@@ -60,7 +62,11 @@ API.DeleteUser = function(inID){
     }); 
 };
 
-API.GetUsers();
+function getPromise(inURL, inQuery){
+    return new Promise(function(inHandler){
+        unirest.get(inURL).query(inQuery).end(inHandler);
+    });
+}
 
 
 var server = express();
@@ -74,25 +80,24 @@ server.get("/login-fb", function(inReq, inRes){
     var code = inReq.query.code;
     var error = inReq.query.error;
     if(code){
-        unirest
-        .get("https://graph.facebook.com/v2.3/oauth/access_token")
-        .query({
-            client_id:"1628003107468799",
-            client_secret:"2db01a126ae61f9b885262470c2abc88",
-            redirect_uri:"http://192.168.2.101/login-fb",
-            code:code})
-        .end(function(inResToken){
-            unirest
-            .get("https://graph.facebook.com/me")
-            .query({
-                "access_token":inResToken.body.access_token
-            })
-            .end(function(inResProfile){
-                inRes.send(inResProfile.body);
-            });  
+        
+        getPromise(process.env.FB_API_TOKEN, {
+            client_id:process.env.FB_APP_ID,
+            client_secret:process.env.FB_APP_SECRET,
+            redirect_uri:process.env.FB_APP_URL,
+            code:code
+        }).then(function(inResponse){
+            return getPromise(process.env.FB_API_PROFILE, {
+                access_token:inResponse.body.access_token
+            });
+        }).then(function(inResponse){
+           inRes.send(inResponse.body); 
         });
+        
     }else{
-        inRes.redirect("https://www.facebook.com/dialog/oauth?client_id=1628003107468799&redirect_uri=http://192.168.2.101/login-fb");
+        
+        inRes.redirect(process.env.FB_API_OAUTH + "?client_id=" + process.env.FB_APP_ID + "&redirect_uri=" + process.env.FB_APP_URL);
+        
     }
 });
 
