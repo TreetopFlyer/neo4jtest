@@ -11,6 +11,8 @@ var server = express();
 server.engine('handlebars', handlebars({defaultLayout:'main'}));
 server.set('view engine', 'handlebars');
 
+server.use("/static", express.static(__dirname+"/static"));
+
 server.use(function(inReq, inRes, inNext){
 	var cookies;
     var i;
@@ -30,6 +32,7 @@ server.use(function(inReq, inRes, inNext){
 	}
 	inNext();
 });
+
 server.use(function(inReq, inRes, inNext)
 {
 	inReq.Auth = {};
@@ -65,8 +68,6 @@ server.get("/profile", function(inReq, inRes){
         console.log(inResponse[0].data[0].row[0]);
         inRes.render("profile", inResponse[0].data[0].row[0]);
     });
-    
-    
 })
 server.get("/login-fb", function(inReq, inRes){
     
@@ -91,30 +92,41 @@ server.get("/login-fb", function(inReq, inRes){
     if(code){
         
         GETPromise(process.env.FB_API_TOKEN,{
+            
             "client_id":process.env.FB_APP_ID,
             "client_secret":process.env.FB_APP_SECRET,
             "redirect_uri":process.env.FB_APP_URL,
             "code":code
+            
         }).then(function(inResponse){
+            
             return GETPromise(process.env.FB_API_PROFILE, {
                 "access_token":inResponse.body.access_token});
+                
         }).then(function(inResponse){
+            
            profile = JSON.parse(inResponse.body);
            return neo([{
                statement:"match (u:User {id:\""+profile.id+"\"}) return u"
            }]);
+           
         }).then(function(inResponse){
             
             console.log("");
             inReq.Auth.LogIn(profile.id);
             inRes.redirect("/profile");
+            
         }, function(inResponse){
+            
             return neo([{
                 statement:"create (u:User {id:\""+profile.id+"\", name:\""+profile.name+"\"}) return u"
             }]);
+            
         }).then(function(inResponse){
+            
             inReq.Auth.LogIn(profile.id);
             inRes.redirect("/profile");
+            
         });
         
     }else{
