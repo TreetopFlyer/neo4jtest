@@ -3,15 +3,9 @@ var express = require('express');
 var handlebars = require('express-handlebars');
 var neo = require('./neo');
 var unirest = require('unirest');
+var Auth = require('./auth.js');
 
-
-/*
-neo4j([{statement:"create (u:User {name:'person', age:25})"}], function(inResponse){
-    console.log(inResponse.body);
-});
-*/
-
-
+Auth.Salt(process.env.FB_APP_SECRET);
 
 var server = express();
 server.engine('handlebars', handlebars({defaultLayout:'main'}));
@@ -22,7 +16,7 @@ server.use(function(inReq, inRes, inNext){
     var i;
     var split, key, value;
 	cookies = inReq.headers.cookie;
-	inReq.cookies = {};
+	inReq.Cookies = {};
 	if(cookies)
 	{
 		cookies = cookies.split("; ");
@@ -31,8 +25,33 @@ server.use(function(inReq, inRes, inNext){
 			split = cookies[i].indexOf("=");
 			key = cookies[i].substring(0, split);
 			value = cookies[i].substring(split+1);
-			inReq.cookies[key] = value;
+			inReq.Cookies[key] = value;
 		}
+	}
+	inNext();
+});
+server.use(function(inReq, inRes, inNext)
+{
+	inReq.Auth = {};
+	inReq.Auth.LogIn = function(inID)
+	{
+		inRes.cookie(Auth.Config.KeyID, inID);
+		inRes.cookie(Auth.Config.KeyIDHash, Auth.Sign(inID));
+	};
+	inReq.Auth.LogOut = function()
+	{
+		inRes.clearCookie(Auth.Config.KeyID);
+		inRes.clearCookie(Auth.Config.KeyIDHash);
+	};
+	inReq.Auth.ID = inReq.Cookies[Auth.Config.KeyID];
+	inReq.Auth.IDHash = inReq.Cookies[Auth.Config.KeyIDHash];
+	if(inReq.Auth.ID === undefined || inReq.Auth.IDHash === undefined)
+	{
+		inReq.Auth.LoggedIn = false;
+	}
+	else
+	{
+		inReq.Auth.LoggedIn = Auth.Verify(inReq.Auth.ID, inReq.Auth.IDHash);
 	}
 	inNext();
 });
@@ -41,12 +60,23 @@ server.get("/", function(inReq, inRes){
 });
 server.get("/profile", function(inReq, inRes){
     
+    neo([{statement:"match (u:User {id:\""+inReq.Auth.ID+"\"}) return u"}])
+    .then(function(inResponse){
+        console.log(inResponse[0].data[0].row[0]);
+        inRes.render("profile", inResponse[0].data[0].row[0]);
+    });
+    
+    
 })
 server.get("/login-fb", function(inReq, inRes){
     
     var code, error;
     var profile;
     var GETPromise
+    
+    if(inReq.Auth.LoggedIn){
+        inRes.redirect("/profile");
+    }
     
     GETPromise = function(inURL, inQuery){
         return new Promise(function(inResolve, inReject){
@@ -74,13 +104,17 @@ server.get("/login-fb", function(inReq, inRes){
                statement:"match (u:User {id:\""+profile.id+"\"}) return u"
            }]);
         }).then(function(inResponse){
-            inRes.redirect("/");
+            
+            console.log("");
+            inReq.Auth.LogIn(profile.id);
+            inRes.redirect("/profile");
         }, function(inResponse){
             return neo([{
                 statement:"create (u:User {id:\""+profile.id+"\", name:\""+profile.name+"\"}) return u"
             }]);
         }).then(function(inResponse){
-            inRes.redirect("/");
+            inReq.Auth.LogIn(profile.id);
+            inRes.redirect("/profile");
         });
         
     }else{
