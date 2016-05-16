@@ -11,87 +11,76 @@ neo4j([{statement:"create (u:User {name:'person', age:25})"}], function(inRespon
 });
 */
 
-var API = {};
-API.GetRows = function(inResponse){
-    
-    var list = inResponse.body.results[0].data;
-    var out = [];
-    var i;
-    for(i=0; i<list.length; i++){
-        out.push(list[i].row[0]);
-    }
-    return out;
-}
-API.GetUsers = function(){
-    var payload = {
-        statement:"match(u:User) return u"  
-    };
-    neo([payload], function(inResponse){
-        console.log(API.GetRows(inResponse));
-    });
-};
-API.CreateUser = function(inName){
-    
-    var payload = {
-        statement:"create (u:User {p}) return u",
-        parameters:{
-            p:{
-                name:inName,
-                id:Math.floor(Math.random()*10000)
-            }
-        }
-    };
-    
-    neo([payload], function(inResponse){
-        console.log(API.GetRows(inResponse));
-    });
-};
-API.DeleteUser = function(inID){
-    var payload = {
-        statement:"create (u:User {p}) return u",
-        parameters:{
-            p:{
-                name:inName,
-                id:Math.floor(Math.random()*10000)
-            }
-        }
-    };
-    
-    neo([payload], function(inResponse){
-        console.log(API.GetRows(inResponse));
-    }); 
-};
-
-function getPromise(inURL, inQuery){
-    return new Promise(function(inHandler){
-        unirest.get(inURL).query(inQuery).end(inHandler);
-    });
-}
 
 
 var server = express();
 server.engine('handlebars', handlebars({defaultLayout:'main'}));
 server.set('view engine', 'handlebars');
+
+server.use(function(inReq, inRes, inNext){
+	var cookies;
+    var i;
+    var split, key, value;
+	cookies = inReq.headers.cookie;
+	inReq.cookies = {};
+	if(cookies)
+	{
+		cookies = cookies.split("; ");
+		for(i=0; i<cookies.length; i++)
+		{
+			split = cookies[i].indexOf("=");
+			key = cookies[i].substring(0, split);
+			value = cookies[i].substring(split+1);
+			inReq.cookies[key] = value;
+		}
+	}
+	inNext();
+});
 server.get("/", function(inReq, inRes){
     inRes.render("home");
 });
+server.get("/profile", function(inReq, inRes){
+    
+})
 server.get("/login-fb", function(inReq, inRes){
     
-    var code = inReq.query.code;
-    var error = inReq.query.error;
+    var code, error;
+    var profile;
+    var GETPromise
+    
+    GETPromise = function(inURL, inQuery){
+        return new Promise(function(inResolve, inReject){
+            unirest.get(inURL).query(inQuery).end(inResolve);
+        });
+    }
+    
+    code = inReq.query.code;
+    error = inReq.query.error;
+    profile = {};
+    
     if(code){
         
-        getPromise(process.env.FB_API_TOKEN, {
-            client_id:process.env.FB_APP_ID,
-            client_secret:process.env.FB_APP_SECRET,
-            redirect_uri:process.env.FB_APP_URL,
-            code:code
+        GETPromise(process.env.FB_API_TOKEN,{
+            "client_id":process.env.FB_APP_ID,
+            "client_secret":process.env.FB_APP_SECRET,
+            "redirect_uri":process.env.FB_APP_URL,
+            "code":code
         }).then(function(inResponse){
-            return getPromise(process.env.FB_API_PROFILE, {
-                access_token:inResponse.body.access_token
-            });
+            return GETPromise(process.env.FB_API_PROFILE, {
+                "access_token":inResponse.body.access_token});
         }).then(function(inResponse){
-           inRes.send(inResponse.body); 
+           profile = JSON.parse(inResponse.body);
+           return neo([{
+               statement:"match (u:User {id:\""+profile.id+"\"}) return u"
+           }]);
+        }).then(function(inResponse){
+            inRes.redirect("/");
+        }, function(inResponse){
+            return neo([{
+                statement:"create (u:User {id:\""+profile.id+"\", name:\""+profile.name+"\"}) return u"
+            }]);
+        }).then(function(inResponse){
+            inRes.redirect("/");
         });
         
     }else{

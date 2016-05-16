@@ -12,12 +12,22 @@ headers = {
     'Content-Type': 'application/json'
 };
 
-rest = function(inStatements, inHandler){
-    unirest
-    .post(config.endpoint)
-    .headers(headers)
-    .send({statements: inStatements})
-    .end(inHandler);
+rest = function(inStatements){
+    
+    return new Promise(function(inResolve, inReject){
+        unirest
+        .post(config.endpoint)
+        .headers(headers)
+        .send({statements: inStatements})
+        .end(function(inResponse){
+            if(inResponse.body.results[0].data.length == 0){
+                inReject(inResponse.body.results);
+            }else{
+                inResolve(inResponse.body.results);
+            }
+        });
+    });
+
 };
 
 module.exports = rest;
