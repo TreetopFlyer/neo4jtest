@@ -1,6 +1,6 @@
 var express = require('express');
 var router = express.Router();
-var neo = require('../db/neo.js');
+var neo = require('../db/neo4j.js');
 var unirest = require('unirest');
 
 
